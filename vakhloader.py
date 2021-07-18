@@ -1,20 +1,62 @@
 from __future__ import unicode_literals
+from requests import api
 from requests.api import get
 from paramiko import SSHClient, RSAKey, AutoAddPolicy
 from scp import SCPClient
+
 import youtube_dl
 import sys
 import logging
 import re
 import argparse
+import json
 
-def getEpisodeNumber(videoTitle):
+def getEpisodeNumberByTitle(videoTitle):
     normalizedTitle = re.search(r'\d+', videoTitle).group()
     return normalizedTitle
 
+def getChannelPlaylistIdByName(apiKey, channelId, playlistName):
+    apiURL = 'https://www.googleapis.com/youtube/v3/channels'
+    apiParams = {'key':apiKey, 'id':channelId, 'part':'contentDetails', 'order':'date', 'maxResults':1}
+
+    request = get(url = apiURL, params = apiParams)
+    data = request.json()
+    logging.debug(f"Channel data response:\n {json.dumps(data, indent=4, sort_keys=True)}")
+    playlistId = data['items'][0]['contentDetails']['relatedPlaylists'][playlistName]
+    logging.debug(f"Playlist ID: {playlistId}")
+
+    return playlistId
+
+def getVideosListByPlaylistId(apiKey, channelId, playlistId):
+    videos = []
+    nextPageToken = None
+    apiURL = 'https://www.googleapis.com/youtube/v3/playlistItems'
+
+    while 1:
+        apiParams = {'key':apiKey, 'playlistId':playlistId, 'part':'snippet', 'order':'date', 'maxResults':50, 'pageToken': nextPageToken}
+
+        request = get(url=apiURL, params=apiParams)
+        data = request.json()
+        logging.debug(f"Channel data response:\n {json.dumps(data, indent=4, sort_keys=True)}")
+
+        videos += data['items']
+        if 'nextPageToken' in data:
+            break
+        else:
+            nextPageToken = data['nextPageToken']
+            logging.debug(f"Next page token:\n {nextPageToken}")
+
+    logging.debug(f"Videos list: \n{json.dumps(videos, indent=4, sort_keys=True)}")
+    return videos
+
+def getVideoInfoByEpisodeNumber(apiKey, channelId, episodeNumber):
+    playlistId = getChannelPlaylistIdByName(apiKey, channelId, 'uploads')
+    playlistVideos = getVideosListByPlaylistId(apiKey, channelId, playlistId)
+
+
 def getLastVideoInfo(apiKey, channelId):
     apiURL = 'https://www.googleapis.com/youtube/v3/search'
-    apiParams = {'key':apiKey, 'channelId':channelId,'part':'id,snippet','order':'date','maxResults':1}
+    apiParams = {'key':apiKey, 'id':channelId, 'part':'id,snippet', 'order':'date', 'maxResults':1}
     logging.debug(f"Send request to {apiURL} with params: {apiParams}")
 
     request = get(url = apiURL, params = apiParams)
@@ -33,7 +75,7 @@ def getLastVideoInfo(apiKey, channelId):
 def getAudioFromYoutubeVideo(videoTitle, videoURL, storagePath):
     logging.info(f"Start video downloading from {videoURL}...")
 
-    episodeNumber = getEpisodeNumber(videoTitle)
+    episodeNumber = getEpisodeNumberByTitle(videoTitle)
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': f"{storagePath}/{episodeNumber}.mp3",
@@ -81,12 +123,14 @@ def main():
     parser.add_argument('-v', '--verbose', action='store_true')
 
     args = parser.parse_args()
-    if (args.episode_number != None):
-        print("test")
+    if (args.verbose):
+        logging.basicConfig(level = logging.DEBUG, filename = 'videos_list.log')
     else:
-        if (args.verbose):
-            logging.basicConfig(level = logging.INFO)
+        logging.basicConfig(level = logging.INFO)
 
+    if (args.episode_number != None):
+        getVideoInfoByEpisodeNumber(args.api_key, args.channel_id, args.episode_number)
+    else:
         lastVideoInfo = getLastVideoInfo(args.api_key, args.channel_id)
         episodeNumber = getAudioFromYoutubeVideo(lastVideoInfo['title'], f"https://www.youtube.com/watch?v={lastVideoInfo['id']}", args.local_storage_path)
         sendFileToTargetServer(args.target_server, args.ssh_key, args.local_storage_path, args.target_storage_path, f"{episodeNumber}.mp3")
