@@ -6,6 +6,7 @@ import youtube_dl
 import sys
 import logging
 import re
+import argparse
 
 def getEpisodeNumber(videoTitle):
     normalizedTitle = re.search(r'\d+', videoTitle).group()
@@ -69,21 +70,26 @@ def sendFileToTargetServer(targetServer, pathToKeyFile, sourcePath, targetPath, 
     scp.close()
 
 def main():
-    if len(sys.argv) < 2:
-        raise Exception('Missing command line parameters')
+    parser = argparse.ArgumentParser(description = 'Download and upload audio track from youtube video.')
+    parser.add_argument('-k', '--api-key', type=str)
+    parser.add_argument('-i', '--channel-id', type=str)
+    parser.add_argument('--local-storage-path', type=str)
+    parser.add_argument('--target-storage-path', type=str)
+    parser.add_argument('--target-server', type=str)
+    parser.add_argument('--ssh-key', type=str, help='Path to private ssh key')
+    parser.add_argument('-e', '--episode-number', type=int)
+    parser.add_argument('-v', '--verbose', action='store_true')
 
-    apiKey = sys.argv[1]
-    channelId = sys.argv[2]
-    localStoragePath = sys.argv[3]
-    targetServer = sys.argv[4]
-    pathToSshKey = sys.argv[5]
-    targetStoragePath = sys.argv[6]
+    args = parser.parse_args()
+    if (args.episode_number != None):
+        print("test")
+    else:
+        if (args.verbose):
+            logging.basicConfig(level = logging.INFO)
 
-    logging.basicConfig(level = logging.INFO)
-
-    lastVideoInfo = getLastVideoInfo(apiKey, channelId)
-    episodeNumber = getAudioFromYoutubeVideo(lastVideoInfo['title'], f"https://www.youtube.com/watch?v={lastVideoInfo['id']}", localStoragePath)
-    sendFileToTargetServer(targetServer, pathToSshKey, localStoragePath, targetStoragePath, f"{episodeNumber}.mp3")
+        lastVideoInfo = getLastVideoInfo(args.api_key, args.channel_id)
+        episodeNumber = getAudioFromYoutubeVideo(lastVideoInfo['title'], f"https://www.youtube.com/watch?v={lastVideoInfo['id']}", args.local_storage_path)
+        sendFileToTargetServer(args.target_server, args.ssh_key, args.local_storage_path, args.target_storage_path, f"{episodeNumber}.mp3")
 
 if __name__ == "__main__":
     main()
