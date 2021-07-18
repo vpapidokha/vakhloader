@@ -151,7 +151,8 @@ def main():
         videoInfo = getLastVideoInfo(args.api_key, args.channel_id)
 
     getAudioFromYoutubeVideo(videoInfo['title'], f"https://www.youtube.com/watch?v={videoInfo['id']}", args.local_storage_path)
-    sendFileToTargetServer(args.target_server, args.ssh_key, args.local_storage_path, args.target_storage_path, f"{videoInfo['episodeNumber']}.mp3")
+    if (args.target_server != None):
+        sendFileToTargetServer(args.target_server, args.ssh_key, args.local_storage_path, args.target_storage_path, f"{videoInfo['episodeNumber']}.mp3")
 
 if __name__ == "__main__":
     main()
