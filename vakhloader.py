@@ -40,7 +40,7 @@ def getVideosListByPlaylistId(apiKey, channelId, playlistId):
         logging.debug(f"Channel data response:\n {json.dumps(data, indent=4, sort_keys=True)}")
 
         videos += data['items']
-        if 'nextPageToken' in data:
+        if ('nextPageToken' in data):
             break
         else:
             nextPageToken = data['nextPageToken']
@@ -53,6 +53,24 @@ def getVideoInfoByEpisodeNumber(apiKey, channelId, episodeNumber):
     playlistId = getChannelPlaylistIdByName(apiKey, channelId, 'uploads')
     playlistVideos = getVideosListByPlaylistId(apiKey, channelId, playlistId)
 
+    for video in playlistVideos:
+        if (int(getEpisodeNumberByTitle(video['snippet']['title'])) == episodeNumber):
+            videoInfo = {
+                'id': video['snippet']['resourceId']['videoId'],
+                'title': video['snippet']['title'],
+                'channelTitle': video['snippet']['channelTitle'],
+                'episodeNumber': getEpisodeNumberByTitle(video['snippet']['title'])
+            }
+
+            break
+
+    try:
+        logging.debug(f"Target video title is: {videoInfo['title']}")
+    except NameError:      
+        logging.error("No video found with such an episode number.")
+        exit()
+
+    return videoInfo
 
 def getLastVideoInfo(apiKey, channelId):
     apiURL = 'https://www.googleapis.com/youtube/v3/search'
@@ -67,6 +85,7 @@ def getLastVideoInfo(apiKey, channelId):
         'id': data['items'][0]['id']['videoId'],
         'title': data['items'][0]['snippet']['title'],
         'channelTitle': data['items'][0]['snippet']['channelTitle'],
+        'episodeNumber': getEpisodeNumberByTitle(data['items'][0]['snippet']['title'])
     }
 
     logging.info(f"Last video on {lastVideoInfo['channelTitle']} is '{lastVideoInfo['title']}' with url https://www.youtube.com/watch?v={lastVideoInfo['id']}")
@@ -89,8 +108,6 @@ def getAudioFromYoutubeVideo(videoTitle, videoURL, storagePath):
 
     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
         ydl.download([videoURL])
-
-    return episodeNumber
 
 def progressForScp(filename, size, sent):
     sys.stdout.write("%s's progress: %.2f%%   \r" % (filename, float(sent)/float(size)*100) )
@@ -124,16 +141,17 @@ def main():
 
     args = parser.parse_args()
     if (args.verbose):
-        logging.basicConfig(level = logging.DEBUG, filename = 'videos_list.log')
+        logging.basicConfig(level = logging.DEBUG)
     else:
         logging.basicConfig(level = logging.INFO)
 
     if (args.episode_number != None):
-        getVideoInfoByEpisodeNumber(args.api_key, args.channel_id, args.episode_number)
+        videoInfo = getVideoInfoByEpisodeNumber(args.api_key, args.channel_id, args.episode_number)
     else:
-        lastVideoInfo = getLastVideoInfo(args.api_key, args.channel_id)
-        episodeNumber = getAudioFromYoutubeVideo(lastVideoInfo['title'], f"https://www.youtube.com/watch?v={lastVideoInfo['id']}", args.local_storage_path)
-        sendFileToTargetServer(args.target_server, args.ssh_key, args.local_storage_path, args.target_storage_path, f"{episodeNumber}.mp3")
+        videoInfo = getLastVideoInfo(args.api_key, args.channel_id)
+
+    getAudioFromYoutubeVideo(videoInfo['title'], f"https://www.youtube.com/watch?v={videoInfo['id']}", args.local_storage_path)
+    sendFileToTargetServer(args.target_server, args.ssh_key, args.local_storage_path, args.target_storage_path, f"{videoInfo['episodeNumber']}.mp3")
 
 if __name__ == "__main__":
     main()
