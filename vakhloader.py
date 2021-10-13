@@ -10,6 +10,10 @@ import logging
 import re
 import argparse
 import json
+import noisereduce
+import librosa
+import soundfile
+import os
 
 def getEpisodeNumberByTitle(videoTitle):
     normalizedTitle = re.search(r'\d+', videoTitle).group()
@@ -95,9 +99,10 @@ def getAudioFromYoutubeVideo(videoTitle, videoURL, storagePath):
     logging.info(f"Start video downloading from {videoURL}...")
 
     episodeNumber = getEpisodeNumberByTitle(videoTitle)
+    filePath = f"{storagePath}/{episodeNumber}.mp3"
     ydl_opts = {
         'format': 'bestaudio/best',
-        'outtmpl': f"{storagePath}/{episodeNumber}.mp3",
+        'outtmpl': filePath,
         'retries': 3,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
@@ -108,6 +113,8 @@ def getAudioFromYoutubeVideo(videoTitle, videoURL, storagePath):
 
     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
         ydl.download([videoURL])
+
+    return filePath
 
 def progressForScp(filename, size, sent):
     sys.stdout.write("%s's progress: %.2f%%   \r" % (filename, float(sent)/float(size)*100) )
@@ -128,6 +135,19 @@ def sendFileToTargetServer(targetServer, pathToKeyFile, sourcePath, targetPath, 
 
     scp.close()
 
+def reduceAudioNoise(audioFilePath):
+    fileName = os.path.basename(audioFilePath)[:-4]
+    filePath = os.path.dirname(audioFilePath)
+
+    # Need to make it faster in some way
+    data, rate = librosa.load(audioFilePath)
+    logging.info(f"Starting the process of denoizing...")
+    reduced_noise = noisereduce.reduce_noise(y=data, sr=rate)
+
+    soundfile.write(f"{filePath}/{fileName}.wav", reduced_noise, rate)
+
+    return audioFilePath
+
 def main():
     parser = argparse.ArgumentParser(description = 'Download and upload audio track from youtube video.')
     parser.add_argument('-k', '--api-key', type=str)
@@ -138,6 +158,7 @@ def main():
     parser.add_argument('--ssh-key', type=str, help='Path to private ssh key')
     parser.add_argument('-e', '--episode-number', type=int)
     parser.add_argument('-v', '--verbose', action='store_true')
+    parser.add_argument('-d', '--denoise', action='store_true')
 
     args = parser.parse_args()
     if (args.verbose):
@@ -150,7 +171,9 @@ def main():
     else:
         videoInfo = getLastVideoInfo(args.api_key, args.channel_id)
 
-    getAudioFromYoutubeVideo(videoInfo['title'], f"https://www.youtube.com/watch?v={videoInfo['id']}", args.local_storage_path)
+    episodeFilePath = getAudioFromYoutubeVideo(videoInfo['title'], f"https://www.youtube.com/watch?v={videoInfo['id']}", args.local_storage_path)
+    if (args.denoise):
+        reduceAudioNoise(episodeFilePath)
     if (args.target_server != None):
         sendFileToTargetServer(args.target_server, args.ssh_key, args.local_storage_path, args.target_storage_path, f"{videoInfo['episodeNumber']}.mp3")
 
