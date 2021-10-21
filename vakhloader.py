@@ -95,18 +95,18 @@ def getLastVideoInfo(apiKey, channelId):
     logging.info(f"Last video on {lastVideoInfo['channelTitle']} is '{lastVideoInfo['title']}' with url https://www.youtube.com/watch?v={lastVideoInfo['id']}")
     return lastVideoInfo
 
-def getAudioFromYoutubeVideo(videoTitle, videoURL, storagePath):
+def getAudioFromYoutubeVideo(videoTitle, videoURL, storagePath, audioCodec='wav'):
     logging.info(f"Start video downloading from {videoURL}...")
 
     episodeNumber = getEpisodeNumberByTitle(videoTitle)
-    filePath = f"{storagePath}/{episodeNumber}.mp3"
+    filePath = f"{storagePath}/{episodeNumber}.{audioCodec}"
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': filePath,
         'retries': 3,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
+            'preferredcodec': audioCodec,
             'preferredquality': '192',
         }]
     }
@@ -159,6 +159,7 @@ def main():
     parser.add_argument('-e', '--episode-number', type=int)
     parser.add_argument('-v', '--verbose', action='store_true')
     parser.add_argument('-d', '--denoise', action='store_true')
+    parser.add_argument('-c', '--audio-codec', type=str)
 
     args = parser.parse_args()
     if (args.verbose):
@@ -171,7 +172,11 @@ def main():
     else:
         videoInfo = getLastVideoInfo(args.api_key, args.channel_id)
 
-    episodeFilePath = getAudioFromYoutubeVideo(videoInfo['title'], f"https://www.youtube.com/watch?v={videoInfo['id']}", args.local_storage_path)
+    if (args.audio_codec == None):
+        episodeFilePath = getAudioFromYoutubeVideo(videoInfo['title'], f"https://www.youtube.com/watch?v={videoInfo['id']}", args.local_storage_path)
+    else:
+        episodeFilePath = getAudioFromYoutubeVideo(videoInfo['title'], f"https://www.youtube.com/watch?v={videoInfo['id']}", args.local_storage_path, args.audio_codec)
+
     if (args.denoise):
         reduceAudioNoise(episodeFilePath)
     if (args.target_server != None):
