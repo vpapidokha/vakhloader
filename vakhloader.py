@@ -31,7 +31,7 @@ def getChannelPlaylistIdByName(apiKey, channelId, playlistName):
 
     return playlistId
 
-def getVideosListByPlaylistId(apiKey, channelId, playlistId):
+def getVideosListByPlaylistId(apiKey, playlistId):
     videos = []
     nextPageToken = None
     apiURL = 'https://www.googleapis.com/youtube/v3/playlistItems'
@@ -55,7 +55,7 @@ def getVideosListByPlaylistId(apiKey, channelId, playlistId):
 
 def getVideoInfoByEpisodeNumber(apiKey, channelId, episodeNumber):
     playlistId = getChannelPlaylistIdByName(apiKey, channelId, 'uploads')
-    playlistVideos = getVideosListByPlaylistId(apiKey, channelId, playlistId)
+    playlistVideos = getVideosListByPlaylistId(apiKey, playlistId)
 
     for video in playlistVideos:
         if (int(getEpisodeNumberByTitle(video['snippet']['title'])) == episodeNumber):
@@ -78,7 +78,7 @@ def getVideoInfoByEpisodeNumber(apiKey, channelId, episodeNumber):
 
 def getLastVideoInfo(apiKey, channelId):
     apiURL = 'https://www.googleapis.com/youtube/v3/search'
-    apiParams = {'key':apiKey, 'id':channelId, 'part':'id,snippet', 'order':'date', 'maxResults':1}
+    apiParams = {'key':apiKey, 'channelId':channelId, 'part':'id,snippet', 'order':'date', 'maxResults':1}
     logging.debug(f"Send request to {apiURL} with params: {apiParams}")
 
     request = get(url = apiURL, params = apiParams)
